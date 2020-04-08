@@ -2,16 +2,16 @@
 
 require('dotenv').config();
 
-const express = require('express');
-
 const pg = require('pg');
-const cors = require('cors');
+const express = require('express');
 const superAgent = require('superagent');
+const cors = require('cors');
+
 
 const PORT = process.env.PORT || 4000;
-
 const app = express();
 app.use(cors());
+
 
 // connection to psql
 const client = new pg.Client(process.env.DATABASE_URL);
@@ -34,48 +34,36 @@ app.get('/bad', (request, response) => {
 app.get('/location', (request, response) => {
 
 
-
-  // if the city is already in our database don't use the API and get it from the Database
-
-  // const SQLcheck = 'SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = city;'
-  // if (SQLcheck){
-  //   console.log('hi I am true');
-
-  // } else {
-  //   console.log('no I am not true')
-  // }
-
-  //-----------------------------------------------------------------------------------------------------------------------
-
   const city = request.query.city;
-  const SQLsearch = 'SERLECT * FROM locations WHERE search_query =$1';
+  const SQL = 'SELECT * FROM locations WHERE search_query = $1';
   const valueSQL = [city];
 
-  client
-    .query(SQLsearch, valueSQL)
-    .then((searchResult) => {
-      if (searchResult.rows.length > 0) {
-        response.status(200).json(searchResult.rows[0]);
-      } else {
-        superAgent(`https://eu1.locationiq.com/v1/search.php?key=${process.env.GEOCODE_API_KEY}&q=${request.query.city}&format=json`)
+  client.query(SQL, valueSQL).then((searchResult) => {
 
-          .then((locationRes) => {
-            const locData = locationRes.body;
-            const locationData = new Location(city, locData);
-            const SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4) RETURNING *';
-            const safeValues = [locationData.search_query, locationData.formatted_query, locationData.latitude, locationData.longitude];
-            client
-              .query(SQL, safeValues)
-              .then((results) => {
-                response.status(200).json(results.rows[0]);
-              });
-          });
+    if (searchResult.rows.length > 0) {
+      response.status(200).json(searchResult.rows[0]);
+    } else {
+      superAgent(`https://eu1.locationiq.com/v1/search.php?key=${process.env.GEOCODE_API_KEY}&q=${request.query.city}&format=json`)
+      
+        .then((locationRes) => {
+          const locData = locationRes.body;
+          const locationData = new Location(city, locData);
+          const SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4) RETURNING *';
+          const valueSQL = [city, 2, 3, 4];
+          client.query(SQL, valueSQL).then((results) => {
+            response.status(200).json(results.rows[0]);
+          })
 
-      }
-    })
-    .catch((error) => errorHandler(error, request, response));
-  
+        }).catch(() =>
+          app.use((error, request, response) => {
+            response.status(500).send(error);
+          })
+        );
+    }
+  })
+
 });
+
 
 // location construtor
 function Location(city, locData) {
@@ -86,19 +74,7 @@ function Location(city, locData) {
 }
 
 
-
-client
-  .connect()
-  .then(() => {
-    app.listen(PORT, () =>
-      console.log(`my server is up and running on port ${PORT}`)
-    );
-  })
-  .catch((err) => {
-    throw new Error(`startup error ${err}`);
-  });
-
-app.use('*', notFoundHandler);
+// app.use('*', notFoundHandler);
 
 // helper functions
 function notFoundHandler(request, response) {
@@ -108,5 +84,20 @@ function notFoundHandler(request, response) {
 function errorHandler(error, request, response) {
   response.status(500).send(error);
 }
+/// check this helper
+function render(data, response) {
+  response.status(200).json(data);
+}
+
+
+client.connect().then(() => {
+
+  app.listen(PORT, () => {
+    console.log(`my server is up and running on port ${PORT}`)
+  });
+
+}).catch((err) => {
+  throw new Error(`startup error ${err}`);
+});
 
 
