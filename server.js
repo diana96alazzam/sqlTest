@@ -47,34 +47,34 @@ app.get('/location', (request, response) => {
 
   //-----------------------------------------------------------------------------------------------------------------------
 
- 
-  superAgent(`https://eu1.locationiq.com/v1/search.php?key=${process.env.GEOCODE_API_KEY}&q=${request.query.city}&format=json`)
+  const city = request.query.city;
+  const SQLsearch = 'SERLECT * FROM locations WHERE search_query =$1';
+  const valueSQL = [city];
+
+  client
+    .query(SQLsearch, valueSQL)
+    .then((searchResult) => {
+      if (searchResult.rows.length > 0) {
+        response.status(200).json(searchResult.rows[0]);
+      } else {
+        superAgent(`https://eu1.locationiq.com/v1/search.php?key=${process.env.GEOCODE_API_KEY}&q=${request.query.city}&format=json`)
+
+          .then((locationRes) => {
+            const locData = locationRes.body;
+            const locationData = new Location(city, locData);
+            const SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4) RETURNING *';
+            const safeValues = [locationData.search_query, locationData.formatted_query, locationData.latitude, locationData.longitude];
+            client
+              .query(SQL, safeValues)
+              .then((results) => {
+                response.status(200).json(results.rows[0]);
+              });
+          });
+
+      }
+    })
+    .catch((error) => errorHandler(error, request, response));
   
-  .then((locationRes)=> {
-
-    let city = request.query.city;
-
-      const locData = locationRes.body;
-      const locationData = new Location(city, locData);
-      const SQL = 'INSERT INTO locations(search_query,formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4) RETURNING *';
-      const safeValues = [locationData.search_query, locationData.formatted_query, locationData.latitude, locationData.longitude];
-    
-      client
-        .query(SQL, safeValues)
-        .then((results) => {
-          response.status(200).json(results.rows);
-        })
-        .catch((err) => {
-          response.status(500).send(err);
-        });
-      // response.status(200).json(locationData);
-  })
-  
-  .catch ((error) => errorHandler(error, request, response));
-
-  //---------------------------------------------------------------------------------------------------------------------------
-
-
 });
 
 // location construtor
@@ -86,32 +86,7 @@ function Location(city, locData) {
 }
 
 
-// get data from the query and Insert it to the DB
-app.get('/add', (req, res) => {
-  let name = req.query.name;
-  let role = req.query.role;
-  const SQL = 'INSERT INTO people(name,role) VALUES ($1,$2) RETURNING *';
-  const safeValues = [req.query.name, req.query.role];
-  client
-    .query(SQL, safeValues)
-    .then((results) => {
-      res.status(200).json(results.rows);
-    })
-    .catch((err) => {
-      res.status(500).send(err);
-    });
-});
-app.get('/people', (req, res) => {
-  const SQL = 'SELECT * FROM people;';
-  client
-    .query(SQL)
-    .then((results) => {
-      res.status(200).json(results.rows);
-    })
-    .catch((err) => {
-      res.status(500).send(err);
-    });
-});
+
 client
   .connect()
   .then(() => {
@@ -123,18 +98,15 @@ client
     throw new Error(`startup error ${err}`);
   });
 
-  app.use('*', notFoundHandler);
+app.use('*', notFoundHandler);
 
-  // helper functions
+// helper functions
 function notFoundHandler(request, response) {
   response.status(404).send('Not Found');
 }
 
 function errorHandler(error, request, response) {
   response.status(500).send(error);
-
-
-  
 }
 
 
