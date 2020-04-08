@@ -49,7 +49,7 @@ app.get('/location', (request, response) => {
           const locData = locationRes.body;
           const locationData = new Location(city, locData);
           const SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1,$2,$3,$4) RETURNING *';
-          const valueSQL = [city, 2, 3, 4];
+          const valueSQL = [locationData.search_query, locationData.formatted_query, locationData.latitude, locationData.longitude];
           client.query(SQL, valueSQL).then((results) => {
             response.status(200).json(results.rows[0]);
           })
