@@ -132,6 +132,9 @@ function notFoundHandler(request, response) {
 
 function errorHandler(error, request, response) {
   response.status(500).send(error);
+
+
+  
 }
 
 
